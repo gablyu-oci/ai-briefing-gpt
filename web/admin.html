@@ -1,0 +1,1772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Briefing Admin</title>
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+    }
+
+    a { color: #e94560; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Header ────────────────────────────────────────────── */
+    .header {
+      background: #16213e;
+      border-bottom: 2px solid #0f3460;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .auto-refresh-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #aaa;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .auto-refresh-toggle input[type="checkbox"] {
+      accent-color: #e94560;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: #0f3460;
+      color: #eee;
+      border: 1px solid #1a5276;
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn:hover { background: #1a5276; }
+    .btn:focus-visible { outline: 2px solid #e94560; outline-offset: 2px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-accent {
+      background: #e94560;
+      border-color: #e94560;
+    }
+
+    .btn-accent:hover { background: #c73b52; }
+
+    /* ── Tabs ──────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      padding: 12px 24px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab-btn:hover { color: #eee; }
+
+    .tab-btn:focus-visible {
+      outline: 2px solid #e94560;
+      outline-offset: -2px;
+    }
+
+    .tab-btn.active {
+      color: #e94560;
+      border-bottom-color: #e94560;
+      font-weight: 600;
+    }
+
+    /* ── Content panels ───────────────────────────────────── */
+    .tab-panel {
+      display: none;
+      padding: 20px 24px;
+    }
+
+    .tab-panel.active { display: block; }
+
+    /* ── Card ──────────────────────────────────────────────── */
+    .card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .card-header .total {
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+
+    /* ── Table ─────────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      min-width: 700px;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 10px 12px;
+      background: #0f3460;
+      color: #ddd;
+      font-weight: 600;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+    }
+
+    tbody td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      vertical-align: top;
+    }
+
+    tbody tr:hover { background: rgba(15,52,96,0.4); }
+
+    .cell-title {
+      max-width: 360px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cell-url {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cell-mono {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      font-size: 0.8rem;
+    }
+
+    /* ── Status dot ───────────────────────────────────────── */
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-green { background: #27ae60; }
+    .dot-red   { background: #e74c3c; }
+
+    /* ── Tier badge ───────────────────────────────────────── */
+    .tier-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .tier-1 { background: #e94560; color: #fff; }
+    .tier-2 { background: #0f3460; color: #eee; }
+    .tier-3 { background: #333; color: #bbb; }
+
+    /* ── JSON expander ────────────────────────────────────── */
+    .json-toggle {
+      cursor: pointer;
+      color: #e94560;
+      font-size: 0.8rem;
+      background: none;
+      border: none;
+      font-family: inherit;
+    }
+
+    .json-toggle:hover { text-decoration: underline; }
+    .json-toggle:focus-visible { outline: 2px solid #e94560; outline-offset: 2px; }
+
+    .json-block {
+      display: none;
+      margin-top: 6px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+      color: #aed581;
+    }
+
+    .json-block.open { display: block; }
+
+    /* ── Pagination ───────────────────────────────────────── */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-top: 1px solid #0f3460;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+
+    /* ── Spinner ───────────────────────────────────────────── */
+    .spinner-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #0f3460;
+      border-top-color: #e94560;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Empty state ──────────────────────────────────────── */
+    .empty {
+      text-align: center;
+      padding: 48px 16px;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    /* ── Error state ──────────────────────────────────────── */
+    .error-banner {
+      background: rgba(233,69,96,0.15);
+      border: 1px solid #e94560;
+      color: #e94560;
+      padding: 10px 16px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+    }
+
+    /* ── Responsive ───────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .header { padding: 12px 16px; }
+      .tab-panel { padding: 14px 12px; }
+      .tab-btn { padding: 10px 14px; font-size: 0.82rem; }
+      table { min-width: 580px; }
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #1a1a2e; }
+    ::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #1a5276; }
+
+    /* ── Visually hidden (screen readers) ──────────────────── */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      border: 0;
+    }
+
+    /* ── Summary Cards ────────────────────────────────────── */
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .summary-card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .summary-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #e94560;
+    }
+
+    .summary-card .label {
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-top: 4px;
+    }
+
+    /* ── Reason bars ──────────────────────────────────────── */
+    .reason-bars {
+      margin-top: 16px;
+    }
+
+    .reason-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .reason-bar .reason-label {
+      width: 140px;
+      font-size: 0.85rem;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .reason-bar .bar-track {
+      flex: 1;
+      height: 20px;
+      background: #0f3460;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .reason-bar .bar-fill {
+      height: 100%;
+      background: #e94560;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .reason-bar .bar-count {
+      width: 50px;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+
+    /* ── Timeline ─────────────────────────────────────────── */
+    .timeline-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 120px;
+      margin-top: 16px;
+      padding: 0 8px;
+    }
+
+    .timeline-bar {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .timeline-bar .bar {
+      width: 100%;
+      background: #e94560;
+      border-radius: 2px 2px 0 0;
+      min-height: 2px;
+      transition: height 0.3s;
+    }
+
+    .timeline-bar .bar-label {
+      font-size: 0.65rem;
+      color: #888;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      max-height: 50px;
+      overflow: hidden;
+    }
+
+    /* ── Cluster row expand ───────────────────────────────── */
+    .cluster-detail {
+      display: none;
+      background: #111;
+      border-top: 1px solid #333;
+    }
+
+    .cluster-detail.open {
+      display: table-row;
+    }
+
+    .cluster-detail td {
+      padding: 12px 16px;
+    }
+
+    .cluster-sub-table {
+      width: 100%;
+      font-size: 0.8rem;
+    }
+
+    .cluster-sub-table th {
+      background: #1a1a2e;
+      padding: 6px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #aaa;
+    }
+
+    .cluster-sub-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+
+    /* ── Cluster active indicators ────────────────────────── */
+    .cluster-active { color: #27ae60; }
+    .cluster-stale { color: #666; }
+
+    /* ── Ranking highlight ────────────────────────────────── */
+    .rank-top3 {
+      background: rgba(233, 69, 96, 0.1) !important;
+    }
+
+    .rank-badge {
+      display: inline-block;
+      width: 26px;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+      border-radius: 50%;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .rank-1 { background: #e94560; color: #fff; }
+    .rank-2 { background: #0f3460; color: #eee; }
+    .rank-3 { background: #0f3460; color: #eee; }
+    .rank-other { background: #333; color: #888; }
+
+    /* ── Audience dropdown ────────────────────────────────── */
+    .audience-select {
+      background: #0f3460;
+      color: #eee;
+      border: 1px solid #1a5276;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .audience-select:focus-visible {
+      outline: 2px solid #e94560;
+      outline-offset: 2px;
+    }
+
+    /* ── Score breakdown inline ────────────────────────────── */
+    .score-mini {
+      display: inline-flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .score-mini span {
+      font-size: 0.72rem;
+      padding: 1px 6px;
+      background: #0f3460;
+      border-radius: 3px;
+      color: #ccc;
+    }
+
+    .clickable-row { cursor: pointer; }
+    .clickable-row:hover { background: rgba(233, 69, 96, 0.08) !important; }
+
+    /* ── Filter bar ──────────────────────────────────────── */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #0f3460;
+      align-items: center;
+    }
+
+    .filter-bar input,
+    .filter-bar select {
+      background: #1a1a2e;
+      color: #eee;
+      border: 1px solid #0f3460;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+
+    .filter-bar input:focus,
+    .filter-bar select:focus {
+      outline: 2px solid #e94560;
+      outline-offset: 1px;
+    }
+
+    .filter-bar input::placeholder {
+      color: #666;
+    }
+
+    .filter-count {
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-left: auto;
+    }
+
+    thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    thead th.sortable:hover {
+      color: #e94560;
+    }
+
+    .sort-indicator {
+      margin-left: 4px;
+      font-size: 0.7rem;
+    }
+  </style>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+
+  <!-- ─── Header ──────────────────────────────────────────── -->
+  <header class="header" role="banner">
+    <h1>AI Briefing Admin</h1>
+    <div class="header-actions">
+      <label class="auto-refresh-toggle">
+        <input type="checkbox" id="autoRefreshToggle" aria-label="Toggle auto-refresh every 30 seconds">
+        Auto-refresh (30s)
+      </label>
+      <button class="btn" id="refreshBtn" aria-label="Refresh current tab data">Refresh</button>
+    </div>
+  </header>
+
+  <!-- ─── Tabs ────────────────────────────────────────────── -->
+  <nav class="tabs" role="tablist" aria-label="Admin sections">
+    <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-articles" id="tab-articles" data-tab="articles">Articles</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-sources" id="tab-sources" data-tab="sources">Sources</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-processing" id="tab-processing" data-tab="processing">Processing Log</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-suppression" id="tab-suppression" data-tab="suppression">Suppression Log</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-clusters" id="tab-clusters" data-tab="clusters">Clusters</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-dedup" id="tab-dedup" data-tab="dedup">Dedup Stats</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-rankings" id="tab-rankings" data-tab="rankings">Rankings</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-clusters3d" id="tab-clusters3d" data-tab="clusters3d">Clusters 3D</button>
+  </nav>
+
+  <!-- ─── Articles Panel ──────────────────────────────────── -->
+  <section class="tab-panel active" id="panel-articles" role="tabpanel" aria-labelledby="tab-articles">
+    <div id="articles-error"></div>
+    <div class="card">
+      <div class="card-header">
+        <span>Articles</span>
+        <span class="total" id="articles-total"></span>
+      </div>
+      <div id="articles-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading articles</span></div></div>
+      <div id="articles-content" style="display:none">
+        <div class="filter-bar">
+          <input type="text" id="articles-search" placeholder="Search titles..." aria-label="Search articles by title">
+          <select id="articles-tier-filter" aria-label="Filter by tier">
+            <option value="">All Tiers</option>
+            <option value="1">Tier 1</option>
+            <option value="2">Tier 2</option>
+            <option value="3">Tier 3</option>
+            <option value="4">Tier 4</option>
+          </select>
+          <select id="articles-date-filter" aria-label="Filter by date">
+            <option value="">All Dates</option>
+            <option value="today">Today</option>
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7 Days</option>
+          </select>
+          <select id="articles-source-filter" aria-label="Filter by source">
+            <option value="">All Sources</option>
+          </select>
+          <span class="filter-count" id="articles-filter-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table aria-label="Articles table">
+            <thead>
+              <tr>
+                <th scope="col" class="sortable" data-sort="title">Title <span class="sort-indicator"></span></th>
+                <th scope="col" class="sortable" data-sort="source">Source <span class="sort-indicator"></span></th>
+                <th scope="col" class="sortable" data-sort="tier">Tier <span class="sort-indicator"></span></th>
+                <th scope="col" class="sortable" data-sort="score">Score <span class="sort-indicator" id="sort-ind-score"></span></th>
+                <th scope="col" class="sortable" data-sort="published">Published <span class="sort-indicator"></span></th>
+                <th scope="col" class="sortable" data-sort="ingested">Ingested <span class="sort-indicator"></span></th>
+              </tr>
+            </thead>
+            <tbody id="articles-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="articles-empty" class="empty" style="display:none">No articles found.</div>
+    </div>
+  </section>
+
+  <!-- ─── Sources Panel ───────────────────────────────────── -->
+  <section class="tab-panel" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources">
+    <div id="sources-error"></div>
+    <div class="card">
+      <div class="card-header">
+        <span>Sources</span>
+        <span class="total" id="sources-total"></span>
+      </div>
+      <div id="sources-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading sources</span></div></div>
+      <div id="sources-content" style="display:none">
+        <div class="table-wrap">
+          <table aria-label="Sources table">
+            <thead>
+              <tr>
+                <th scope="col">Domain</th>
+                <th scope="col">Display Name</th>
+                <th scope="col">Tier</th>
+                <th scope="col">Credibility</th>
+                <th scope="col">Active</th>
+                <th scope="col">RSS URL</th>
+              </tr>
+            </thead>
+            <tbody id="sources-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="sources-empty" class="empty" style="display:none">No sources configured.</div>
+    </div>
+  </section>
+
+  <!-- ─── Processing Log Panel ────────────────────────────── -->
+  <section class="tab-panel" id="panel-processing" role="tabpanel" aria-labelledby="tab-processing">
+    <div id="processing-error"></div>
+    <div class="card">
+      <div class="card-header">
+        <span>Processing Log</span>
+        <span class="total" id="processing-total"></span>
+      </div>
+      <div id="processing-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading processing log</span></div></div>
+      <div id="processing-content" style="display:none">
+        <div class="table-wrap">
+          <table aria-label="Processing log table">
+            <thead>
+              <tr>
+                <th scope="col">Article ID</th>
+                <th scope="col">Stage</th>
+                <th scope="col">Score Breakdown</th>
+                <th scope="col">Created At</th>
+              </tr>
+            </thead>
+            <tbody id="processing-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button class="btn" id="processing-prev" disabled>Prev</button>
+          <span id="processing-page-info"></span>
+          <button class="btn" id="processing-next" disabled>Next</button>
+        </div>
+      </div>
+      <div id="processing-empty" class="empty" style="display:none">No processing log entries.</div>
+    </div>
+  </section>
+
+  <!-- ─── Suppression Log Panel ───────────────────────────── -->
+  <section class="tab-panel" id="panel-suppression" role="tabpanel" aria-labelledby="tab-suppression">
+    <div id="suppression-error"></div>
+    <div class="card">
+      <div class="card-header">
+        <span>Suppression Log</span>
+        <span class="total" id="suppression-total"></span>
+      </div>
+      <div id="suppression-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading suppression log</span></div></div>
+      <div id="suppression-content" style="display:none">
+        <div class="table-wrap">
+          <table aria-label="Suppression log table">
+            <thead>
+              <tr>
+                <th scope="col">Article ID</th>
+                <th scope="col">Reason</th>
+                <th scope="col">Similarity Score</th>
+                <th scope="col">Matched Cluster</th>
+                <th scope="col">Suppressed At</th>
+              </tr>
+            </thead>
+            <tbody id="suppression-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button class="btn" id="suppression-prev" disabled>Prev</button>
+          <span id="suppression-page-info"></span>
+          <button class="btn" id="suppression-next" disabled>Next</button>
+        </div>
+      </div>
+      <div id="suppression-empty" class="empty" style="display:none">No suppression log entries.</div>
+    </div>
+  </section>
+
+  <!-- ─── Clusters Panel ──────────────────────────────────── -->
+  <section class="tab-panel" id="panel-clusters" role="tabpanel" aria-labelledby="tab-clusters">
+    <div id="clusters-error"></div>
+    <div class="card">
+      <div class="card-header">
+        <span>Story Clusters</span>
+        <span class="total" id="clusters-total"></span>
+      </div>
+      <div id="clusters-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading clusters</span></div></div>
+      <div id="clusters-content" style="display:none">
+        <div class="table-wrap">
+          <table aria-label="Story clusters table">
+            <thead>
+              <tr>
+                <th scope="col">Headline</th>
+                <th scope="col">Canonical URL</th>
+                <th scope="col">First Seen</th>
+                <th scope="col">Last Seen</th>
+                <th scope="col">Days Active</th>
+                <th scope="col">Suppressed</th>
+                <th scope="col">Embedding</th>
+              </tr>
+            </thead>
+            <tbody id="clusters-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button class="btn" id="clusters-prev" disabled>Prev</button>
+          <span id="clusters-page-info"></span>
+          <button class="btn" id="clusters-next" disabled>Next</button>
+        </div>
+      </div>
+      <div id="clusters-empty" class="empty" style="display:none">No story clusters found.</div>
+    </div>
+  </section>
+
+  <!-- ─── Dedup Stats Panel ──────────────────────────────── -->
+  <section class="tab-panel" id="panel-dedup" role="tabpanel" aria-labelledby="tab-dedup">
+    <div id="dedup-error"></div>
+    <div id="dedup-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading dedup stats</span></div></div>
+    <div id="dedup-content" style="display:none">
+      <div class="summary-cards" id="dedup-cards"></div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><span>Suppressions by Reason</span></div>
+        <div style="padding:16px" id="dedup-reasons"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span>Clusters Created Per Day (7d)</span></div>
+        <div style="padding:16px" id="dedup-timeline"></div>
+      </div>
+    </div>
+    <div id="dedup-empty" class="empty" style="display:none">No dedup data available.</div>
+  </section>
+
+  <!-- ─── Rankings Panel ──────────────────────────────────── -->
+  <section class="tab-panel" id="panel-rankings" role="tabpanel" aria-labelledby="tab-rankings">
+    <div id="rankings-error"></div>
+    <div class="card">
+      <div class="card-header">
+        <span>Audience Rankings</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <select class="audience-select" id="audience-select" aria-label="Select audience">
+            <option value="karan">Karan</option>
+            <option value="nathan">Nathan</option>
+            <option value="greg">Greg</option>
+            <option value="mahesh">Mahesh</option>
+          </select>
+          <span class="total" id="rankings-info"></span>
+        </div>
+      </div>
+      <div id="rankings-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading rankings</span></div></div>
+      <div id="rankings-content" style="display:none">
+        <div class="table-wrap">
+          <table aria-label="Rankings table">
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Title</th>
+                <th scope="col">Source</th>
+                <th scope="col">Total</th>
+                <th scope="col">Credibility</th>
+                <th scope="col">Timeliness</th>
+                <th scope="col">Relevance</th>
+                <th scope="col">Keyword</th>
+              </tr>
+            </thead>
+            <tbody id="rankings-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="rankings-empty" class="empty" style="display:none">No ranking data available.</div>
+    </div>
+  </section>
+
+  <!-- ─── Clusters 3D Panel ──────────────────────────────── -->
+  <section class="tab-panel" id="panel-clusters3d" role="tabpanel" aria-labelledby="tab-clusters3d">
+    <div id="clusters3d-error"></div>
+    <div class="card">
+      <div class="card-header">
+        <span>Clusters 3D</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <select class="audience-select" id="clusters3d-days" aria-label="Select days">
+            <option value="3">3 days</option>
+            <option value="7" selected>7 days</option>
+            <option value="14">14 days</option>
+            <option value="30">30 days</option>
+          </select>
+          <span class="total" id="clusters3d-info"></span>
+        </div>
+      </div>
+      <div id="clusters3d-spinner" class="spinner-wrap"><div class="spinner" role="status"><span class="sr-only">Loading clusters 3D</span></div></div>
+      <div id="clusters3d-content" style="display:none">
+        <div id="clusters3d-plot" style="width:100%;height:calc(100vh - 200px);"></div>
+      </div>
+      <div id="clusters3d-empty" class="empty" style="display:none">No cluster data available.</div>
+    </div>
+  </section>
+
+  <script>
+    /* ================================================================
+       AI Briefing Admin — Client-side logic
+       ================================================================ */
+    (function () {
+      "use strict";
+
+      // ── Configuration ─────────────────────────────────────
+      var API_BASE = window.location.origin;
+      var PER_PAGE = 50;
+
+      // ── State ─────────────────────────────────────────────
+      var state = {
+        activeTab: "articles",
+        processingPage: 1,
+        suppressionPage: 1,
+        autoRefresh: false,
+        autoRefreshTimer: null,
+        clustersPage: 1,
+        loaded: { articles: false, sources: false, processing: false, suppression: false, clusters: false, dedup: false, rankings: false, clusters3d: false },
+        allArticles: [],
+        sourceMap: {},
+        articleSort: { key: 'score', dir: 'desc' }
+      };
+
+      // ── Helpers ───────────────────────────────────────────
+      function $(id) { return document.getElementById(id); }
+
+      function escapeHtml(str) {
+        if (str == null) return "";
+        var div = document.createElement("div");
+        div.appendChild(document.createTextNode(String(str)));
+        return div.innerHTML;
+      }
+
+      function formatDate(iso) {
+        if (!iso) return "-";
+        try {
+          var d = new Date(iso);
+          return d.toLocaleString(undefined, {
+            year: "numeric", month: "short", day: "numeric",
+            hour: "2-digit", minute: "2-digit"
+          });
+        } catch (_) {
+          return iso;
+        }
+      }
+
+      function tierBadge(tier) {
+        var t = tier != null ? tier : "?";
+        var cls = "tier-badge";
+        if (t === 1) cls += " tier-1";
+        else if (t === 2) cls += " tier-2";
+        else cls += " tier-3";
+        return '<span class="' + cls + '">Tier ' + escapeHtml(t) + '</span>';
+      }
+
+      function showError(prefix, msg) {
+        var el = $(prefix + "-error");
+        if (!el) return;
+        el.innerHTML = '<div class="error-banner">Error: ' + escapeHtml(msg) + '</div>';
+      }
+
+      function clearError(prefix) {
+        var el = $(prefix + "-error");
+        if (el) el.innerHTML = "";
+      }
+
+      function showSpinner(prefix) {
+        var s = $(prefix + "-spinner");
+        var c = $(prefix + "-content");
+        var e = $(prefix + "-empty");
+        if (s) s.style.display = "flex";
+        if (c) c.style.display = "none";
+        if (e) e.style.display = "none";
+      }
+
+      function hideSpinner(prefix) {
+        var s = $(prefix + "-spinner");
+        if (s) s.style.display = "none";
+      }
+
+      function showContent(prefix) {
+        var c = $(prefix + "-content");
+        if (c) c.style.display = "";
+      }
+
+      function showEmpty(prefix) {
+        var e = $(prefix + "-empty");
+        if (e) e.style.display = "";
+      }
+
+      function setTotal(prefix, total) {
+        var el = $(prefix + "-total");
+        if (el) el.textContent = total + " total";
+      }
+
+      function setPagination(prefix, page, total) {
+        var totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+        var info = $(prefix + "-page-info");
+        var prev = $(prefix + "-prev");
+        var next = $(prefix + "-next");
+        if (info) info.textContent = "Page " + page + " of " + totalPages;
+        if (prev) prev.disabled = page <= 1;
+        if (next) next.disabled = page >= totalPages;
+      }
+
+      // ── JSON expand/collapse ──────────────────────────────
+      var jsonCounter = 0;
+
+      function jsonCell(data) {
+        if (data == null) return '<span style="color:#666">null</span>';
+        var id = "json-" + (++jsonCounter);
+        var formatted;
+        try {
+          formatted = typeof data === "string" ? JSON.stringify(JSON.parse(data), null, 2) : JSON.stringify(data, null, 2);
+        } catch (_) {
+          formatted = String(data);
+        }
+        return '<button class="json-toggle" aria-expanded="false" aria-controls="' + id + '" onclick="window.__toggleJson(this, \'' + id + '\')">&#9654; View</button>' +
+               '<div class="json-block" id="' + id + '" role="region">' + escapeHtml(formatted) + '</div>';
+      }
+
+      window.__toggleJson = function (btn, id) {
+        var block = $(id);
+        if (!block) return;
+        var open = block.classList.toggle("open");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        btn.innerHTML = open ? "&#9660; Hide" : "&#9654; View";
+      };
+
+      // ── Fetch wrapper ─────────────────────────────────────
+      function apiFetch(path) {
+        return fetch(API_BASE + path).then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status + " " + res.statusText);
+          return res.json();
+        });
+      }
+
+      // ── Source Map (for article source display) ─────────
+      function loadSourceMap() {
+        return apiFetch("/admin/sources")
+          .then(function (data) {
+            var sources = data.sources || [];
+            state.sourceMap = {};
+            sources.forEach(function (s) {
+              state.sourceMap[s.id] = s.display_name || s.domain || String(s.id);
+            });
+          })
+          .catch(function () {
+            // Non-critical; articles will fall back to source_id
+            state.sourceMap = {};
+          });
+      }
+
+      // ── Articles ──────────────────────────────────────────
+      function loadArticles() {
+        clearError("articles");
+        showSpinner("articles");
+
+        apiFetch("/admin/articles?page=1&per_page=500")
+          .then(function (data) {
+            hideSpinner("articles");
+            var articles = data.articles || [];
+            state.allArticles = articles;
+            setTotal("articles", articles.length);
+
+            if (articles.length === 0) {
+              showEmpty("articles");
+              return;
+            }
+
+            showContent("articles");
+            populateSourceFilter();
+            renderArticles();
+            state.loaded.articles = true;
+          })
+          .catch(function (err) {
+            hideSpinner("articles");
+            showError("articles", err.message);
+          });
+      }
+
+      function populateSourceFilter() {
+        var select = $("articles-source-filter");
+        while (select.options.length > 1) {
+          select.remove(1);
+        }
+        var seen = {};
+        state.allArticles.forEach(function (a) {
+          var name = a.source_name || "";
+          if (name && !seen[name]) {
+            seen[name] = true;
+          }
+        });
+        Object.keys(seen).sort(function (a, b) {
+          return a.toLowerCase() < b.toLowerCase() ? -1 : 1;
+        }).forEach(function (name) {
+          var opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          select.appendChild(opt);
+        });
+      }
+
+      function renderArticles() {
+        var searchVal = ($("articles-search").value || "").toLowerCase();
+        var tierVal = $("articles-tier-filter").value;
+        var dateVal = $("articles-date-filter").value;
+        var sourceVal = $("articles-source-filter").value;
+        var now = new Date();
+
+        // Filter
+        var filtered = state.allArticles.filter(function (a) {
+          // Title search
+          if (searchVal && (a.title || "").toLowerCase().indexOf(searchVal) === -1) return false;
+          // Tier
+          if (tierVal && String(a.tier) !== tierVal) return false;
+          // Source
+          if (sourceVal && (a.source_name || "") !== sourceVal) return false;
+          // Date
+          if (dateVal) {
+            var pubDate = a.published_at ? new Date(a.published_at) : null;
+            if (!pubDate) return false;
+            if (dateVal === "today") {
+              if (pubDate.toDateString() !== now.toDateString()) return false;
+            } else if (dateVal === "24h") {
+              if ((now - pubDate) > 86400000) return false;
+            } else if (dateVal === "7d") {
+              if ((now - pubDate) > 7 * 86400000) return false;
+            }
+          }
+          return true;
+        });
+
+        // Sort
+        var sortKey = state.articleSort.key;
+        var sortDir = state.articleSort.dir === "asc" ? 1 : -1;
+
+        filtered.sort(function (a, b) {
+          var va, vb;
+          if (sortKey === "title") {
+            va = (a.title || "").toLowerCase();
+            vb = (b.title || "").toLowerCase();
+            return va < vb ? -sortDir : va > vb ? sortDir : 0;
+          } else if (sortKey === "source") {
+            va = (a.source_name || "").toLowerCase();
+            vb = (b.source_name || "").toLowerCase();
+            return va < vb ? -sortDir : va > vb ? sortDir : 0;
+          } else if (sortKey === "tier") {
+            va = a.tier != null ? a.tier : 999;
+            vb = b.tier != null ? b.tier : 999;
+            return (va - vb) * sortDir;
+          } else if (sortKey === "score") {
+            va = a.raw_score != null ? Number(a.raw_score) : -Infinity;
+            vb = b.raw_score != null ? Number(b.raw_score) : -Infinity;
+            return (va - vb) * sortDir;
+          } else if (sortKey === "published") {
+            va = a.published_at ? new Date(a.published_at).getTime() : 0;
+            vb = b.published_at ? new Date(b.published_at).getTime() : 0;
+            return (va - vb) * sortDir;
+          } else if (sortKey === "ingested") {
+            va = a.ingest_at ? new Date(a.ingest_at).getTime() : 0;
+            vb = b.ingest_at ? new Date(b.ingest_at).getTime() : 0;
+            return (va - vb) * sortDir;
+          }
+          return 0;
+        });
+
+        // Update filter count
+        $("articles-filter-count").textContent = "Showing " + filtered.length + " of " + state.allArticles.length + " articles";
+
+        // Render
+        if (filtered.length === 0) {
+          $("articles-tbody").innerHTML = '<tr><td colspan="6" style="text-align:center;color:#666;padding:24px">No articles match the current filters.</td></tr>';
+          return;
+        }
+
+        var rows = filtered.map(function (a) {
+          var sourceName = a.source_name || "";
+          return "<tr>" +
+            '<td class="cell-title" title="' + escapeHtml(a.title) + '">' +
+              (a.url ? '<a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener">' + escapeHtml(a.title) + '</a>' : escapeHtml(a.title)) +
+            "</td>" +
+            "<td>" + escapeHtml(sourceName) + "</td>" +
+            "<td>" + tierBadge(a.tier) + "</td>" +
+            "<td>" + (a.raw_score != null ? Number(a.raw_score).toFixed(2) : "-") + "</td>" +
+            "<td>" + formatDate(a.published_at) + "</td>" +
+            "<td>" + formatDate(a.ingest_at) + "</td>" +
+            "</tr>";
+        });
+
+        $("articles-tbody").innerHTML = rows.join("");
+      }
+
+      // ── Articles filter event listeners ──────────────────
+      var articlesSearchTimer = null;
+      $("articles-search").addEventListener("input", function () {
+        clearTimeout(articlesSearchTimer);
+        articlesSearchTimer = setTimeout(renderArticles, 150);
+      });
+      $("articles-tier-filter").addEventListener("change", renderArticles);
+      $("articles-date-filter").addEventListener("change", renderArticles);
+      $("articles-source-filter").addEventListener("change", renderArticles);
+
+      // ── Articles sort click handler ──────────────────────
+      document.querySelectorAll("#panel-articles th.sortable").forEach(function (th) {
+        th.addEventListener("click", function () {
+          var key = th.getAttribute("data-sort");
+          if (state.articleSort.key === key) {
+            state.articleSort.dir = state.articleSort.dir === "asc" ? "desc" : "asc";
+          } else {
+            state.articleSort.key = key;
+            // Default directions
+            if (key === "score" || key === "published" || key === "ingested") {
+              state.articleSort.dir = "desc";
+            } else {
+              state.articleSort.dir = "asc";
+            }
+          }
+          // Update sort indicators
+          document.querySelectorAll("#panel-articles th.sortable .sort-indicator").forEach(function (span) {
+            span.textContent = "";
+          });
+          var indicator = th.querySelector(".sort-indicator");
+          if (indicator) {
+            indicator.textContent = state.articleSort.dir === "asc" ? "\u25B2" : "\u25BC";
+          }
+          renderArticles();
+        });
+      });
+
+      // Set initial sort indicator for score column
+      (function () {
+        var scoreInd = $("sort-ind-score");
+        if (scoreInd) scoreInd.textContent = "\u25BC";
+      })();
+
+      // ── Sources ───────────────────────────────────────────
+      function loadSources() {
+        clearError("sources");
+        showSpinner("sources");
+
+        apiFetch("/admin/sources")
+          .then(function (data) {
+            hideSpinner("sources");
+            var sources = data.sources || [];
+            setTotal("sources", data.total || 0);
+
+            if (sources.length === 0) {
+              showEmpty("sources");
+              return;
+            }
+
+            showContent("sources");
+
+            var rows = sources.map(function (s) {
+              var dotClass = s.active ? "dot dot-green" : "dot dot-red";
+              var dotLabel = s.active ? "Active" : "Inactive";
+              return "<tr>" +
+                "<td>" + escapeHtml(s.domain) + "</td>" +
+                "<td>" + escapeHtml(s.display_name) + "</td>" +
+                "<td>" + tierBadge(s.tier) + "</td>" +
+                "<td>" + (s.credibility_score != null ? Number(s.credibility_score).toFixed(1) : "-") + "</td>" +
+                '<td><span class="' + dotClass + '" title="' + dotLabel + '" role="img" aria-label="' + dotLabel + '"></span></td>' +
+                '<td class="cell-url cell-mono" title="' + escapeHtml(s.rss_url) + '">' + escapeHtml(s.rss_url || "-") + "</td>" +
+                "</tr>";
+            });
+
+            $("sources-tbody").innerHTML = rows.join("");
+            state.loaded.sources = true;
+          })
+          .catch(function (err) {
+            hideSpinner("sources");
+            showError("sources", err.message);
+          });
+      }
+
+      // ── Processing Log ────────────────────────────────────
+      function loadProcessingLog() {
+        clearError("processing");
+        showSpinner("processing");
+
+        apiFetch("/admin/processing-log?page=" + state.processingPage + "&per_page=" + PER_PAGE)
+          .then(function (data) {
+            hideSpinner("processing");
+            var logs = data.logs || [];
+            setTotal("processing", data.total || 0);
+
+            if (logs.length === 0) {
+              showEmpty("processing");
+              return;
+            }
+
+            showContent("processing");
+            setPagination("processing", data.page, data.total);
+
+            var rows = logs.map(function (l) {
+              return "<tr>" +
+                '<td class="cell-mono">' + escapeHtml(l.article_id) + "</td>" +
+                "<td>" + escapeHtml(l.stage) + "</td>" +
+                "<td>" + jsonCell(l.score_breakdown) + "</td>" +
+                "<td>" + formatDate(l.created_at) + "</td>" +
+                "</tr>";
+            });
+
+            $("processing-tbody").innerHTML = rows.join("");
+            state.loaded.processing = true;
+          })
+          .catch(function (err) {
+            hideSpinner("processing");
+            showError("processing", err.message);
+          });
+      }
+
+      // ── Suppression Log ───────────────────────────────────
+      function loadSuppressionLog() {
+        clearError("suppression");
+        showSpinner("suppression");
+
+        apiFetch("/admin/suppression-log?page=" + state.suppressionPage + "&per_page=" + PER_PAGE)
+          .then(function (data) {
+            hideSpinner("suppression");
+            var logs = data.logs || [];
+            setTotal("suppression", data.total || 0);
+
+            if (logs.length === 0) {
+              showEmpty("suppression");
+              return;
+            }
+
+            showContent("suppression");
+            setPagination("suppression", data.page, data.total);
+
+            var rows = logs.map(function (l) {
+              return "<tr>" +
+                '<td class="cell-mono">' + escapeHtml(l.article_id) + "</td>" +
+                "<td>" + escapeHtml(l.reason) + "</td>" +
+                "<td>" + (l.similarity_score != null ? Number(l.similarity_score).toFixed(4) : "-") + "</td>" +
+                '<td class="cell-mono">' + escapeHtml(l.matched_cluster_id || "-") + "</td>" +
+                "<td>" + formatDate(l.suppressed_at) + "</td>" +
+                "</tr>";
+            });
+
+            $("suppression-tbody").innerHTML = rows.join("");
+            state.loaded.suppression = true;
+          })
+          .catch(function (err) {
+            hideSpinner("suppression");
+            showError("suppression", err.message);
+          });
+      }
+
+      // ── Tab loaders map ───────────────────────────────────
+      var loaders = {
+        articles: loadArticles,
+        sources: loadSources,
+        processing: loadProcessingLog,
+        suppression: loadSuppressionLog,
+        clusters: loadClusters,
+        dedup: loadDedupStats,
+        rankings: loadRankings,
+        clusters3d: loadClusters3D
+      };
+
+      function loadActiveTab() {
+        loaders[state.activeTab]();
+      }
+
+      // ── Tab switching ─────────────────────────────────────
+      var tabBtns = document.querySelectorAll(".tab-btn");
+      var panels = document.querySelectorAll(".tab-panel");
+
+      tabBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var tab = btn.getAttribute("data-tab");
+
+          tabBtns.forEach(function (b) {
+            b.classList.remove("active");
+            b.setAttribute("aria-selected", "false");
+          });
+          btn.classList.add("active");
+          btn.setAttribute("aria-selected", "true");
+
+          panels.forEach(function (p) { p.classList.remove("active"); });
+          $("panel-" + tab).classList.add("active");
+
+          state.activeTab = tab;
+
+          // Load data on first visit or refresh
+          if (!state.loaded[tab]) {
+            loaders[tab]();
+          }
+        });
+
+        // Keyboard navigation between tabs
+        btn.addEventListener("keydown", function (e) {
+          var btnsArr = Array.from(tabBtns);
+          var idx = btnsArr.indexOf(btn);
+          var target = null;
+
+          if (e.key === "ArrowRight") target = btnsArr[(idx + 1) % btnsArr.length];
+          else if (e.key === "ArrowLeft") target = btnsArr[(idx - 1 + btnsArr.length) % btnsArr.length];
+          else if (e.key === "Home") target = btnsArr[0];
+          else if (e.key === "End") target = btnsArr[btnsArr.length - 1];
+
+          if (target) {
+            e.preventDefault();
+            target.focus();
+            target.click();
+          }
+        });
+      });
+
+      // ── Pagination handlers ───────────────────────────────
+      $("processing-prev").addEventListener("click", function () {
+        if (state.processingPage > 1) { state.processingPage--; loadProcessingLog(); }
+      });
+      $("processing-next").addEventListener("click", function () {
+        state.processingPage++;
+        loadProcessingLog();
+      });
+
+      $("suppression-prev").addEventListener("click", function () {
+        if (state.suppressionPage > 1) { state.suppressionPage--; loadSuppressionLog(); }
+      });
+      $("suppression-next").addEventListener("click", function () {
+        state.suppressionPage++;
+        loadSuppressionLog();
+      });
+
+      // ── Refresh ───────────────────────────────────────────
+      $("refreshBtn").addEventListener("click", function () {
+        state.loaded[state.activeTab] = false;
+        loadActiveTab();
+      });
+
+      // ── Clusters ────────────────────────────────────────────
+      function isToday(isoStr) {
+        if (!isoStr) return false;
+        var d = new Date(isoStr);
+        var now = new Date();
+        return d.toDateString() === now.toDateString();
+      }
+
+      function daysActive(firstSeen, lastSeen) {
+        if (!firstSeen || !lastSeen) return "-";
+        var a = new Date(firstSeen);
+        var b = new Date(lastSeen);
+        return Math.max(1, Math.ceil((b - a) / 86400000));
+      }
+
+      function loadClusters() {
+        clearError("clusters");
+        showSpinner("clusters");
+
+        apiFetch("/admin/clusters?page=" + state.clustersPage + "&per_page=" + PER_PAGE)
+          .then(function (data) {
+            hideSpinner("clusters");
+            var clusters = data.clusters || [];
+            setTotal("clusters", data.total || 0);
+
+            if (clusters.length === 0) {
+              showEmpty("clusters");
+              return;
+            }
+
+            showContent("clusters");
+            setPagination("clusters", data.page, data.total);
+
+            var rows = clusters.map(function (c) {
+              var active = isToday(c.last_seen);
+              var statusClass = active ? "cluster-active" : "cluster-stale";
+              var embeddingDot = c.has_embedding
+                ? '<span class="dot dot-green" title="Has embedding" role="img" aria-label="Has embedding"></span>'
+                : '<span class="dot dot-red" title="No embedding" role="img" aria-label="No embedding"></span>';
+
+              return '<tr class="clickable-row" data-cluster-id="' + c.id + '">' +
+                '<td class="cell-title ' + statusClass + '" title="' + escapeHtml(c.headline) + '">' + escapeHtml(c.headline) + "</td>" +
+                '<td class="cell-url"><a href="' + escapeHtml(c.canonical_url) + '" target="_blank" rel="noopener">' + escapeHtml((c.canonical_url || "").replace(/^https?:\/\//, "").substring(0, 40)) + '</a></td>' +
+                "<td>" + formatDate(c.first_seen) + "</td>" +
+                "<td>" + formatDate(c.last_seen) + "</td>" +
+                "<td>" + daysActive(c.first_seen, c.last_seen) + "</td>" +
+                "<td>" + (c.articles_suppressed || 0) + "</td>" +
+                "<td>" + embeddingDot + "</td>" +
+                "</tr>" +
+                '<tr class="cluster-detail" id="cluster-detail-' + c.id + '"><td colspan="7"><div class="spinner-wrap" style="padding:12px"><div class="spinner" role="status"></div></div></td></tr>';
+            });
+
+            $("clusters-tbody").innerHTML = rows.join("");
+
+            // Attach click handlers for expanding
+            var clickableRows = document.querySelectorAll("#clusters-tbody .clickable-row");
+            clickableRows.forEach(function (row) {
+              row.addEventListener("click", function () {
+                var cid = row.getAttribute("data-cluster-id");
+                var detailRow = $("cluster-detail-" + cid);
+                if (detailRow.classList.contains("open")) {
+                  detailRow.classList.remove("open");
+                  return;
+                }
+                detailRow.classList.add("open");
+                loadClusterDetail(cid, detailRow);
+              });
+            });
+
+            state.loaded.clusters = true;
+          })
+          .catch(function (err) {
+            hideSpinner("clusters");
+            showError("clusters", err.message);
+          });
+      }
+
+      function loadClusterDetail(clusterId, detailRow) {
+        apiFetch("/admin/clusters/" + clusterId)
+          .then(function (data) {
+            var articles = data.suppressed_articles || [];
+            if (articles.length === 0) {
+              detailRow.querySelector("td").innerHTML = '<div class="empty" style="padding:12px">No suppressed articles for this cluster.</div>';
+              return;
+            }
+
+            var html = '<table class="cluster-sub-table"><thead><tr>' +
+              "<th>Title</th><th>Source</th><th>Reason</th><th>Similarity</th><th>Suppressed At</th>" +
+              "</tr></thead><tbody>";
+
+            articles.forEach(function (item) {
+              var a = item.article || {};
+              html += "<tr>" +
+                '<td><a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener">' + escapeHtml(a.title) + "</a></td>" +
+                "<td>" + escapeHtml(a.source_id) + "</td>" +
+                "<td>" + escapeHtml(item.reason) + "</td>" +
+                "<td>" + (item.similarity_score != null ? Number(item.similarity_score).toFixed(4) : "-") + "</td>" +
+                "<td>" + formatDate(item.suppressed_at) + "</td>" +
+                "</tr>";
+            });
+
+            html += "</tbody></table>";
+            detailRow.querySelector("td").innerHTML = html;
+          })
+          .catch(function (err) {
+            detailRow.querySelector("td").innerHTML = '<div class="error-banner">Error loading cluster details: ' + escapeHtml(err.message) + '</div>';
+          });
+      }
+
+      // ── Clusters pagination ──────────────────────────────
+      $("clusters-prev").addEventListener("click", function () {
+        if (state.clustersPage > 1) { state.clustersPage--; loadClusters(); }
+      });
+      $("clusters-next").addEventListener("click", function () {
+        state.clustersPage++;
+        loadClusters();
+      });
+
+      // ── Dedup Stats ─────────────────────────────────────
+      function loadDedupStats() {
+        clearError("dedup");
+        showSpinner("dedup");
+
+        apiFetch("/admin/dedup-stats")
+          .then(function (data) {
+            hideSpinner("dedup");
+            showContent("dedup");
+
+            // Summary cards
+            $("dedup-cards").innerHTML =
+              '<div class="summary-card"><div class="value">' + (data.total_clusters || 0) + '</div><div class="label">Total Clusters (7d)</div></div>' +
+              '<div class="summary-card"><div class="value">' + (data.total_suppressions || 0) + '</div><div class="label">Total Suppressions</div></div>' +
+              '<div class="summary-card"><div class="value">' + (data.clusters_today || 0) + '</div><div class="label">Clusters Today</div></div>' +
+              '<div class="summary-card"><div class="value">' + (data.articles_today || 0) + '</div><div class="label">Articles Today</div></div>';
+
+            // Suppressions by reason
+            var reasons = data.suppressions_by_reason || {};
+            var reasonKeys = Object.keys(reasons);
+            if (reasonKeys.length === 0) {
+              $("dedup-reasons").innerHTML = '<div class="empty" style="padding:8px">No suppressions recorded.</div>';
+            } else {
+              var maxCount = Math.max.apply(null, reasonKeys.map(function (k) { return reasons[k]; }));
+              var barsHtml = reasonKeys.sort(function (a, b) { return reasons[b] - reasons[a]; }).map(function (k) {
+                var pct = maxCount > 0 ? (reasons[k] / maxCount * 100) : 0;
+                return '<div class="reason-bar">' +
+                  '<span class="reason-label">' + escapeHtml(k) + '</span>' +
+                  '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+                  '<span class="bar-count">' + reasons[k] + '</span>' +
+                  '</div>';
+              }).join("");
+              $("dedup-reasons").innerHTML = barsHtml;
+            }
+
+            // Timeline
+            var timeline = data.clusters_per_day || [];
+            if (timeline.length === 0) {
+              $("dedup-timeline").innerHTML = '<div class="empty" style="padding:8px">No timeline data.</div>';
+            } else {
+              var maxDay = Math.max.apply(null, timeline.map(function (d) { return d.count; }));
+              var barsHtml = '<div class="timeline-chart">' + timeline.map(function (d) {
+                var h = maxDay > 0 ? Math.max(2, (d.count / maxDay) * 100) : 2;
+                var label = d.date ? d.date.substring(5) : "";
+                return '<div class="timeline-bar">' +
+                  '<div class="bar" style="height:' + h + 'px" title="' + escapeHtml(d.date) + ': ' + d.count + '"></div>' +
+                  '<div class="bar-label">' + escapeHtml(label) + '</div>' +
+                  '</div>';
+              }).join("") + '</div>';
+              $("dedup-timeline").innerHTML = barsHtml;
+            }
+
+            state.loaded.dedup = true;
+          })
+          .catch(function (err) {
+            hideSpinner("dedup");
+            showError("dedup", err.message);
+          });
+      }
+
+      // ── Rankings ────────────────────────────────────────
+      function loadRankings() {
+        clearError("rankings");
+        showSpinner("rankings");
+        var audience = $("audience-select").value;
+
+        apiFetch("/admin/rankings/" + audience)
+          .then(function (data) {
+            hideSpinner("rankings");
+            var articles = data.ranked_articles || [];
+            var briefing = data.briefing;
+
+            if (briefing) {
+              $("rankings-info").textContent = briefing.briefing_date + " · " + briefing.article_count + " articles";
+            } else {
+              $("rankings-info").textContent = "No briefing found";
+            }
+
+            if (articles.length === 0) {
+              showEmpty("rankings");
+              return;
+            }
+
+            showContent("rankings");
+
+            var rows = articles.map(function (a) {
+              var bd = a.score_breakdown || {};
+              var isTop3 = a.rank <= 3;
+              var rankCls = a.rank <= 3 ? "rank-" + a.rank : "rank-other";
+              return '<tr class="' + (isTop3 ? "rank-top3" : "") + '">' +
+                '<td><span class="rank-badge ' + rankCls + '">' + a.rank + '</span></td>' +
+                '<td class="cell-title"><a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener">' + escapeHtml(a.title) + '</a></td>' +
+                "<td>" + escapeHtml(a.source_id) + "</td>" +
+                "<td>" + (a.total_score != null ? Number(a.total_score).toFixed(2) : "-") + "</td>" +
+                "<td>" + (bd.credibility != null ? Number(bd.credibility).toFixed(2) : "-") + "</td>" +
+                "<td>" + (bd.timeliness != null ? Number(bd.timeliness).toFixed(2) : "-") + "</td>" +
+                "<td>" + (bd.section_relevance != null ? Number(bd.section_relevance).toFixed(2) : "-") + "</td>" +
+                "<td>" + (bd.keyword_bonus != null ? Number(bd.keyword_bonus).toFixed(2) : "-") + "</td>" +
+                "</tr>";
+            });
+
+            $("rankings-tbody").innerHTML = rows.join("");
+            state.loaded.rankings = true;
+          })
+          .catch(function (err) {
+            hideSpinner("rankings");
+            showError("rankings", err.message);
+          });
+      }
+
+      $("audience-select").addEventListener("change", function () {
+        state.loaded.rankings = false;
+        loadRankings();
+      });
+
+      // ── Clusters 3D ─────────────────────────────────────
+      var CLUSTER_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#00bcd4", "#ff6b6b", "#a29bfe", "#fd79a8", "#55efc4"];
+
+      function loadClusters3D() {
+        clearError("clusters3d");
+        showSpinner("clusters3d");
+        var days = $("clusters3d-days").value;
+
+        apiFetch("/admin/viz/clusters-3d?days=" + days)
+          .then(function (data) {
+            hideSpinner("clusters3d");
+            var points = data.points || [];
+
+            if (points.length === 0) {
+              showEmpty("clusters3d");
+              return;
+            }
+
+            showContent("clusters3d");
+            $("clusters3d-info").textContent = data.total_points + " articles in " + data.total_clusters + " clusters";
+
+            // Group points by cluster_label
+            var groups = {};
+            points.forEach(function (p) {
+              var label = p.cluster_label;
+              if (!groups[label]) groups[label] = [];
+              groups[label].push(p);
+            });
+
+            // Sort keys: noise (-1) last, then ascending
+            var keys = Object.keys(groups).map(Number).sort(function (a, b) {
+              if (a === -1) return 1;
+              if (b === -1) return -1;
+              return a - b;
+            });
+
+            var traces = keys.map(function (label) {
+              var pts = groups[label];
+              var isNoise = label === -1;
+              var color = isNoise ? "#555555" : CLUSTER_COLORS[label % CLUSTER_COLORS.length];
+
+              return {
+                x: pts.map(function (p) { return p.x; }),
+                y: pts.map(function (p) { return p.y; }),
+                z: pts.map(function (p) { return p.z; }),
+                mode: "markers",
+                type: "scatter3d",
+                name: isNoise ? "Noise (" + pts.length + ")" : "Cluster " + label + " (" + pts.length + ")",
+                text: pts.map(function (p) {
+                  var domain = "";
+                  try { domain = new URL(p.url).hostname.replace("www.", ""); } catch (e) { domain = ""; }
+                  var seen = p.first_seen ? formatDate(p.first_seen) : "";
+                  return escapeHtml(p.headline) + "<br>Source: " + escapeHtml(domain) + "<br>First seen: " + seen;
+                }),
+                hoverinfo: "text",
+                customdata: pts.map(function (p) { return p.url; }),
+                marker: {
+                  size: isNoise ? 3 : 5,
+                  color: color,
+                  opacity: isNoise ? 0.3 : 0.85,
+                  line: { width: 0 }
+                }
+              };
+            });
+
+            var layout = {
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(0,0,0,0)",
+              font: { color: "#ccc", size: 11 },
+              margin: { l: 0, r: 0, t: 0, b: 0 },
+              scene: {
+                xaxis: { title: "", showticklabels: false, gridcolor: "#2a2a4e", zerolinecolor: "#2a2a4e" },
+                yaxis: { title: "", showticklabels: false, gridcolor: "#2a2a4e", zerolinecolor: "#2a2a4e" },
+                zaxis: { title: "", showticklabels: false, gridcolor: "#2a2a4e", zerolinecolor: "#2a2a4e" },
+                bgcolor: "#1a1a2e"
+              },
+              legend: {
+                font: { color: "#ccc" },
+                bgcolor: "rgba(22,33,62,0.8)",
+                bordercolor: "#0f3460",
+                borderwidth: 1
+              },
+              hoverlabel: {
+                bgcolor: "#16213e",
+                bordercolor: "#0f3460",
+                font: { color: "#eee", size: 12 }
+              }
+            };
+
+            Plotly.newPlot("clusters3d-plot", traces, layout, { responsive: true, displayModeBar: true });
+
+            // Click to open URL
+            $("clusters3d-plot").on("plotly_click", function (eventData) {
+              if (eventData && eventData.points && eventData.points.length > 0) {
+                var url = eventData.points[0].customdata;
+                if (url) window.open(url, "_blank", "noopener");
+              }
+            });
+
+            state.loaded.clusters3d = true;
+          })
+          .catch(function (err) {
+            hideSpinner("clusters3d");
+            showError("clusters3d", err.message);
+          });
+      }
+
+      $("clusters3d-days").addEventListener("change", function () {
+        state.loaded.clusters3d = false;
+        loadClusters3D();
+      });
+
+      // ── Auto-refresh ──────────────────────────────────────
+      $("autoRefreshToggle").addEventListener("change", function () {
+        state.autoRefresh = this.checked;
+        if (state.autoRefresh) {
+          state.autoRefreshTimer = setInterval(function () {
+            state.loaded[state.activeTab] = false;
+            loadActiveTab();
+          }, 30000);
+        } else {
+          clearInterval(state.autoRefreshTimer);
+          state.autoRefreshTimer = null;
+        }
+      });
+
+      // ── Initial load ──────────────────────────────────────
+      loadSourceMap().then(function () {
+        loadArticles();
+      });
+
+    })();
+  </script>
+</body>
+</html>
