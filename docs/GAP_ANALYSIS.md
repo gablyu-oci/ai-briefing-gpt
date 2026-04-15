@@ -1,8 +1,8 @@
 # Gap Analysis: AI Daily Executive Briefing
 
-**Date:** 2026-04-08 (updated)
-**Previous assessment:** 2026-03-11
-**Codebase assessed:** main branch, post-Phase 2 embedding dedup implementation
+**Date:** 2026-04-14
+**Previous assessment:** 2026-04-08
+**Codebase assessed:** Codex live copy (`ai-daily-briefing-codex`)
 
 ---
 
@@ -10,24 +10,24 @@
 
 | P0 Feature | Status | Notes |
 |---|---|---|
-| **Ingestion pipeline** | **Implemented** | 31 RSS sources (6 Tier 1, 13 Tier 2, 8 Tier 3, 4 Tier 4). Full article text extraction via Trafilatura + httpx. Concurrent fetching (10 workers). Reddit community signals added. |
-| **Normalization** | **Implemented** | SpaCy NER (en_core_web_sm) for entity extraction. Keyword-based section tagging. Full-text extraction for richer embeddings. |
-| **7-day deduplication** | **Implemented** | 5-stage in-run Jaccard pipeline + embedding-based cross-day dedup. nomic-embed-text-v1.5 (256d Matryoshka). 7-day rolling cluster window in SQLite. Fact-delta scoring (6 signals). Follow-up detection. Suppression logging. In-memory cluster propagation fixes duplicate clusters. |
-| **Scoring engine** | **Implemented** | 4 core dimensions (credibility, timeliness, section_relevance, keyword_bonus). Split scoring: pre-score before dedup, full audience score after classification. 7-dimension engine exists in app/scoring/engine.py but main.py uses the 4-dimension version. |
-| **Audience profiles** | Partial | 4 executives defined with name, title, tone, section_weights, accent_color. Missing: topics_of_interest, negative_topics, companies_of_interest, geo_focus, time_horizon, max_length. |
-| **Profile schema validation** | Missing | No validation at load time. |
-| **8 briefing sections** | Partial | 12 section keys defined. PRD canonical 8-section structure not enforced. No per-audience length budgets. |
-| **LLM generation** | **Implemented** | Haiku classification + Sonnet summarization + executive summaries. Caching. Retry with backoff. Uses full_text when available. 15 concurrent workers. |
-| **Confidence tags** | Partial | Uses high/medium/low. PRD specifies confirmed/credible_report/weak_signal/follow_up. |
-| **Source labels** | **Implemented** | Source name, tier badge, date, link all rendered. |
-| **Editorial rules enforcement** | Missing | 0 of 9 rules programmatically enforced. |
-| **HTML email delivery** | Missing | Stub only. No Postmark integration. |
-| **Web archive copy** | **Implemented** | Static HTML to output/YYYY-MM-DD/. Served via nginx at ainews.oci-incubations.com. |
-| **Tracked links** | Missing | No click tracking infrastructure. |
-| **Suppression log** | **Implemented** | Cross-day suppressions logged to suppression_log table with reason, similarity score, matched cluster ID. Viewable in admin dashboard. |
-| **Daily cron schedule** | **Implemented** | Cron at 5:00 AM UTC via scripts/daily_run.sh. Systemd services for auto-start. |
-| **Basic feedback controls** | Missing | No feedback UI in rendered output. |
-| **Email metrics** | Missing | No open/click tracking. |
+| **Ingestion pipeline** | **Implemented** | 31 RSS sources, full article extraction via Trafilatura + httpx, daily scheduled ingest into SQLite. |
+| **Normalization** | **Implemented** | SpaCy NER, keyword-based section tagging, full-text extraction for richer embeddings. |
+| **7-day deduplication** | **Implemented** | Daily in-batch embedding dedup plus weekly 7-day embedding dedup over stored articles. Manual full pipeline still retains fact-delta logic. |
+| **Scoring engine** | **Implemented** | 4 core dimensions in the scheduled flow (credibility, timeliness, section relevance, keyword bonus). 7-dimension engine exists separately but is not the live default. |
+| **Audience profiles** | Partial | 4 executives defined with name, title, tone, section weights, and accent color. Extended schema fields remain incomplete. |
+| **Profile schema validation** | Missing | No strict validation layer at load time. |
+| **8 briefing sections** | Partial | 12 section keys exist. PRD canonical 8-section structure is not enforced. |
+| **LLM generation** | **Implemented** | Codex / Oracle Code Assist classification, summarization, executive summaries, and daily importance filtering. Caching, retry, and concurrency limits are in place. |
+| **Confidence tags** | Partial | Uses `high` / `medium` / `low`. PRD wants `confirmed` / `credible_report` / `weak_signal` / `follow_up`. |
+| **Source labels** | **Implemented** | Source name, tier badge, date, and original link are rendered. |
+| **Editorial rules enforcement** | Missing | Hard rules are still editorial conventions, not code-enforced gates. |
+| **HTML email delivery** | Partial | Weekly pipeline sends HTML email via Gmail-compatible SMTP. Missing: daily delivery, click tracking, open tracking, bounce analytics. |
+| **Web archive copy** | **Implemented** | Static HTML at `output/YYYY-MM-DD/`, served live via nginx/systemd. |
+| **Tracked links** | Missing | No click-tracking infrastructure yet. |
+| **Suppression log** | **Implemented** | Suppressions and cluster matches are persisted and visible in the admin UI. |
+| **Daily cron schedule** | **Implemented** | Daily ingest at 05:00 UTC and weekly full digest/email every Monday at 06:00 UTC via `scripts/daily_run.sh`. |
+| **Basic feedback controls** | Missing | No thumbs up/down or structured feedback controls in the output. |
+| **Email metrics** | Missing | No provider event ingestion or tracking logs for open/click/CTR. |
 
 ---
 
@@ -35,56 +35,51 @@
 
 | Category | Count |
 |---|---|
-| **Fully implemented** | 10 |
-| **Partially implemented** | 3 |
-| **Missing** | 4 |
-| **Total** | 17 |
+| **Fully implemented** | 9 |
+| **Partially implemented** | 4 |
+| **Missing** | 5 |
+| **Total** | 18 |
 
-**Fully implemented:** Ingestion, Normalization, 7-day dedup, Scoring, LLM generation, Source labels, Web archive, Suppression log, Daily cron, Full-text extraction
+**Fully implemented:** Ingestion, normalization, 7-day dedup, scoring, LLM generation, source labels, web archive, suppression log, daily/weekly scheduling
 
-**Partially implemented:** Audience profiles (missing extended fields), Confidence tags (wrong vocabulary), Briefing sections (12 vs canonical 8)
+**Partially implemented:** Audience profiles, confidence tags, briefing sections, HTML email delivery
 
-**Missing:** Email delivery, Tracked links, Feedback controls, Editorial rules enforcement
+**Missing:** Profile schema validation, editorial rules enforcement, tracked links, feedback controls, email metrics
 
 ---
 
-## 3. What Changed Since March 11 Assessment
+## 3. What Changed Since April 8
 
-| Item | March 11 | April 8 |
+| Item | April 8 | April 14 |
 |---|---|---|
-| RSS sources | 15 | **31** (added Tier 1 business news, security, Reddit) |
-| Dedup | Jaccard only, in-memory, no cross-day | **Embedding-based cross-day dedup with 7-day rolling window** |
-| Embedding model | None | **nomic-embed-text-v1.5 (256d Matryoshka, 8K context)** |
-| NER | Regex only | **SpaCy en_core_web_sm** |
-| Full text | RSS summary only (1500 chars) | **Trafilatura extraction (5000 chars)** |
-| Fact-delta | None | **6-signal scoring (time, numbers, entities, quotes, verbs)** |
-| Database persistence | In-memory only | **SQLite with articles, clusters, suppressions** |
-| Admin dashboard | Basic 5 endpoints | **8 tabs: Articles (filter/sort), Sources, Clusters, Dedup Stats, Rankings, Clusters 3D** |
-| 3D visualization | None | **UMAP + HDBSCAN + Plotly.js interactive scatter plot** |
-| Cron | None | **Daily 5 AM UTC** |
-| Hosting | Manual | **nginx + systemd at ainews.oci-incubations.com** |
-| Scoring | Before dedup | **Pre-score → dedup → classify → full score (saves LLM calls)** |
-| Pipeline steps | 7 | **9** |
+| LLM backend | Codex conversion in progress | **Codex / Oracle Code Assist is the live backend for all scheduled runs** |
+| Daily job | Lightweight ingest only | **Daily ingest now includes a Codex importance filter before DB persistence** |
+| Weekly delivery | HTML generation only | **Weekly pipeline now sends HTML email via Gmail-compatible SMTP** |
+| Public site | Older Claude copy still serving | **Codex copy now serves `ainews.oci-incubations.com` and `/admin`** |
+| Cron | Original Claude project scheduled | **Only the Codex copy remains scheduled** |
 
 ---
 
 ## 4. Remaining Work (Priority Order)
 
 ### High Priority
-1. **Email delivery via Postmark** — briefings generated but not emailed
-2. **Confidence tag vocabulary** — change high/medium/low to confirmed/credible_report/weak_signal/follow_up
-3. **Audience profile enrichment** — add topics_of_interest, companies_of_interest, geo_focus to scoring
+
+1. **Daily rendered digest and/or daily email** — current daily cron only ingests important articles into SQLite
+2. **Confidence tag vocabulary** — change `high` / `medium` / `low` to `confirmed` / `credible_report` / `weak_signal` / `follow_up`
+3. **Audience profile enrichment** — add topics of interest, companies of interest, and geo focus to scoring
 
 ### Medium Priority
+
 4. **Editorial rules enforcement** — validation gate before rendering
-5. **Feedback controls** — thumbs up/down per story in rendered output
-6. **Tracked links** — per-audience click tracking URLs
+5. **Feedback controls** — thumbs up/down or structured feedback per story
+6. **Tracked links + email events** — per-audience click tracking plus open/click/bounce capture
 
 ### Lower Priority
+
 7. **Profile schema validation** — load-time checks
 8. **Canonical 8-section structure** — enforce PRD section taxonomy
-9. **Email metrics** — open/click/CTR via Postmark webhooks
+9. **Internal-source ingestion** — Slack, Jira, customer reports, and other non-RSS sources
 
 ---
 
-*Updated 2026-04-08. Previous analysis at commit 1a627b7 (2026-03-11).*
+*Updated 2026-04-14 for the live Codex deployment.*

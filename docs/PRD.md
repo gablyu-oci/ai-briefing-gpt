@@ -7,6 +7,10 @@
 
 ---
 
+**Implementation note (2026-04-14):** This PRD remains the target-state requirements document. The current Codex copy does not yet implement every section exactly as written. The live system today runs a daily lightweight ingest at `05:00 UTC`, a weekly full digest + website update + SMTP email every Monday at `06:00 UTC`, and stores all ingested articles in local SQLite. For the implemented behavior, use `README.md`, `docs/ARCHITECTURE.md`, and `docs/GAP_ANALYSIS.md` as the source of truth.
+
+---
+
 ## Table of Contents
 
 1. [Product Vision & Goals](#1-product-vision--goals)
@@ -1106,9 +1110,9 @@ Community signal items require additional validation before appearing in any bri
 
 ### 8.1 Email Delivery (P0 — Must-Have at Launch)
 
-**Delivery method:** HTML email via Postmark transactional email API.
+**Delivery method:** HTML email via Gmail-compatible SMTP in the current copy. If delivery analytics become a priority, this can be upgraded later to a dedicated transactional ESP without changing the rendering pipeline.
 
-**Schedule:** Daily at 6:00 AM in each recipient's local timezone. Default timezone is US/Eastern. Timezone per recipient is configurable in the audience profile.
+**Schedule:** Current copy sends the full digest weekly every Monday at 6:00 AM UTC and performs daily ingest at 5:00 AM UTC. A future daily recipient-local delivery schedule can be layered on later if the product direction changes.
 
 **Email format requirements:**
 - Responsive HTML email template (renders correctly on mobile and desktop email clients)
@@ -1118,11 +1122,11 @@ Community signal items require additional validation before appearing in any bri
 - Sender name: `OCI Intelligence Brief` from a dedicated sending address (e.g., `brief@oci-intel.oracle.com`)
 - Unsubscribe link required (CAN-SPAM compliance)
 
-**Postmark configuration:**
-- Use Postmark's Message Streams for transactional email
-- Enable open tracking (Postmark pixel) on all emails
-- Enable click tracking on all links
-- Store Postmark message IDs in the delivery log for event correlation
+**SMTP / ESP configuration:**
+- Current copy sends through Gmail-compatible SMTP with an app password or secret file
+- Plain-text fallback is required alongside HTML
+- Store transport/provider message IDs in the delivery log for later event correlation
+- If open/click tracking becomes required, add a tracking-capable ESP or a custom event service on top of the existing HTML renderer
 
 **Tracking links:**
 - Every story link must be replaced with a unique per-audience, per-story tracking URL
@@ -1164,17 +1168,17 @@ Community signal items require additional validation before appearing in any bri
 
 ### 8.4 Scheduling and Triggers
 
-**Primary trigger:** Daily cron job at 5:00 AM (pipeline start; briefing delivered by 6:00 AM)
+**Current triggers:**
+- Daily cron job at 5:00 AM UTC for lightweight ingest into SQLite
+- Weekly cron job at 6:00 AM UTC every Monday for the full briefing render + email delivery
 
 **Pipeline execution sequence:**
-1. 5:00 AM — Ingestion runs (RSS, crawlers, community APIs)
-2. 5:15 AM — Normalization and entity extraction
-3. 5:25 AM — Story clustering and deduplication
-4. 5:35 AM — Scoring (all dimensions)
-5. 5:45 AM — Audience-specific selection and ranking
-6. 5:50 AM — LLM generation (summaries, OCI implications, executive summary)
-7. 5:58 AM — Rendering (HTML email + web archive)
-8. 6:00 AM — Email delivery via Postmark
+1. Daily 5:00 AM UTC — RSS ingest, embeddings, dedup, Codex importance filter, SQLite persistence
+2. Weekly Monday 6:00 AM UTC — load last 7 days from SQLite
+3. Weekly Monday 6:05 AM UTC — weekly dedup, classify, relevance filter, audience scoring
+4. Weekly Monday 6:15 AM UTC — summary generation + executive summaries
+5. Weekly Monday 6:20 AM UTC — rendering (web archive + email HTML)
+6. Weekly Monday 6:25 AM UTC — email delivery via Gmail-compatible SMTP
 
 **Error handling:** If the pipeline fails before LLM generation, send an alert to the system operator. Do not send a partial or empty briefing. A configurable fallback allows sending the prior day's briefing with a "data unavailable" notice in extreme cases (this must be explicitly enabled by an operator).
 
@@ -1184,13 +1188,13 @@ Community signal items require additional validation before appearing in any bri
 
 ### 9.1 Email Metrics
 
-Tracked via Postmark event API (webhooks or polling):
+Target state: tracked via provider delivery events plus a custom tracking service. The current copy does not yet persist these metrics.
 
 | Metric | Definition |
 |---|---|
 | Delivered | Email accepted by recipient mail server |
 | Bounced | Email rejected by recipient mail server (hard or soft bounce) |
-| Opened | Postmark open event (pixel fire) |
+| Opened | Provider or tracking-pixel open event |
 | Unique opens | Deduplicated opens per recipient per briefing |
 | Clicked | Any tracked link clicked |
 | Unique clicks | Deduplicated clicks per recipient per briefing |
@@ -1266,7 +1270,7 @@ interface FeedbackEvent {
 
 | KPI | Target | Measurement method |
 |---|---|---|
-| Email open rate | >70% | Postmark open events / delivered |
+| Email open rate | >70% | Email event logs / delivered |
 | Click-through rate | >20% | Unique clicks / delivered |
 | Delivery success rate | >99% | Delivered / attempted |
 | Pipeline on-time delivery | >95% | Briefing delivered by 6:00 AM ±5 min |
@@ -1278,7 +1282,7 @@ interface FeedbackEvent {
 
 | KPI | Target | Measurement method |
 |---|---|---|
-| Email open rate | >75% | Postmark |
+| Email open rate | >75% | Email event logs |
 | Click-through rate | >25% | Tracking URLs |
 | Click-to-open rate | >35% | CTR / open rate |
 | Top section identification | At least 1 dominant section per audience | Content metrics aggregation |
@@ -1290,7 +1294,7 @@ interface FeedbackEvent {
 
 | KPI | Target | Measurement method |
 |---|---|---|
-| Email open rate | >80% | Postmark |
+| Email open rate | >80% | Email event logs |
 | Click-through rate | >30% | Tracking URLs |
 | Audience relevance score | >4.0/5.0 (from explicit feedback) | Feedback event aggregation |
 | Useful/Not useful ratio | >4:1 | Feedback events |
@@ -1320,13 +1324,13 @@ These features are required for the system to be usable. Launch is blocked if an
 | Confidence tags | All 4 tags assigned and rendered appropriately |
 | Source labels | Every item has source label and original URL |
 | Editorial rules enforcement | All 9 hardcoded rules checked before render |
-| HTML email delivery | Via Postmark with open tracking and click tracking |
+| HTML email delivery | Weekly via Gmail-compatible SMTP today; dedicated tracking-capable ESP optional later |
 | Web archive copy | Static HTML saved to object storage |
 | Tracked links | Per-audience, per-story tracking URLs |
 | Suppression log | All suppressed items logged with reason |
-| Daily cron schedule | Pipeline runs daily at 5:00 AM with email delivery by 6:00 AM |
+| Daily cron schedule | Pipeline ingests daily at 5:00 AM UTC and currently sends the full digest weekly on Monday at 6:00 AM UTC |
 | Basic feedback controls | Thumbs up / thumbs down per story (minimum viable) |
-| Email metrics | Open, click, CTR tracked via Postmark and stored |
+| Email metrics | Open, click, CTR tracked via provider events + custom tracking service and stored |
 
 ### P1 — Launch Plus (Target: 30–60 days post-launch)
 
@@ -1380,7 +1384,7 @@ These features enhance the product but depend on P0 and P1 being stable.
 
 **Community layer — dedicated APIs.** HN Algolia API (free, no rate limit concern), Reddit API (register an app; PRAW library), GitHub REST API for trending repos (approximated via stars velocity endpoint).
 
-**Newsletter layer** — For private newsletters (e.g., SemiAnalysis), set up a dedicated email address that forwards to a parser. Use a service like Zapier or a custom inbound email webhook (Postmark supports inbound email) to ingest newsletter content.
+**Newsletter layer** — For private newsletters (e.g., SemiAnalysis), set up a dedicated email address that forwards to a parser. Use a custom inbound email webhook or mailbox poller to ingest newsletter content.
 
 **Do not** build a web scraper-first architecture. RSS and search APIs are more reliable, more scalable, and less likely to be blocked. Scraping should be reserved for the small number of high-value Tier 1 sources that do not publish RSS (specific utility commission websites, some regulatory databases).
 
@@ -1392,7 +1396,7 @@ These features enhance the product but depend on P0 and P1 being stable.
 
 **Recommendation:** Implement the two-stage renderer described in the brief, with the following concrete architecture:
 
-**Stage 1 — Common editorial bundle:** Run the full pipeline once daily. Output: a JSON bundle of 20–40 scored story objects, each with full metadata (scores, entities, confidence tags, OCI implications, per-audience summaries).
+**Stage 1 — Common editorial bundle:** Run the shared ranking pipeline on the desired cadence. The current copy ingests daily and renders a full digest weekly. Output: a JSON bundle of 20–40 scored story objects, each with full metadata (scores, entities, confidence tags, OCI implications, per-audience summaries).
 
 **Stage 2 — Audience-specific selection and rendering:** For each audience, run a selection function that filters the bundle by:
 1. Section weight map (select top N items per section proportional to weights)
@@ -1415,7 +1419,7 @@ The rendering output is an audience-specific HTML email template populated with 
 
 **Recommendation:** The source tier framework in Section 5.2 (Dimension 1: Source Credibility) provides the scoring model. For operational implementation:
 
-**Build a static source registry** (Postgres table: `sources`) with fields: `domain`, `display_name`, `tier`, `credibility_score`, `rss_url`, `crawl_frequency`, `active`. Pre-populate with all sources listed in Section 4 (Briefing Section Specification) and the scoring section of the brief.
+**Build a static source registry** (currently the `sources` table in SQLite; move to Postgres later only if scale requires it) with fields: `domain`, `display_name`, `tier`, `credibility_score`, `rss_url`, `crawl_frequency`, `active`. Pre-populate with all sources listed in Section 4 (Briefing Section Specification) and the scoring section of the brief.
 
 **For initial launch,** the following sources are hardcoded as Tier 1 (score 10):
 - SEC EDGAR
@@ -1436,14 +1440,14 @@ The rendering output is an audience-specific HTML email template populated with 
 
 **Original question:** "Implemented with Claude Code + cronjob or OpenClaw (preferrably claude code takes most of the token usage b/c paid by company)"
 
-**Updated recommendation for this copy:** Build with OpenAI models accessed through Oracle Code Assist's Codex CLI, deployed as a scheduled Python application running on OCI Compute (or OCI Container Instances for easier management).
+**Updated recommendation for this copy:** Build with OpenAI models accessed through Oracle Code Assist's Codex CLI, deployed as a scheduled Python application running on OCI Compute.
 
 **Architecture:**
-- **Orchestration:** Python application with APScheduler or a simple cron job on OCI Compute. A cronjob is operationally simpler than a full workflow engine for this use case.
+- **Orchestration:** Python application with cron + systemd on OCI Compute. The current copy already uses `scripts/daily_ingest.py` daily and `scripts/weekly_pipeline.py` weekly.
 - **LLM calls:** `codex exec` authenticated through Oracle Code Assist. All summarization, OCI implication generation, and strategic impact scoring go through OpenAI models surfaced through the Oracle-managed Codex configuration.
-- **LLM cost optimization:** Run entity extraction, clustering, and scoring with lighter-weight models or rule-based systems. Reserve the stronger Codex/OpenAI profile for: (a) per-item summary generation, (b) OCI implication generation, (c) strategic impact scoring, and (d) executive summary generation.
-- **Vector search:** Qdrant (open source, self-hosted on OCI) for semantic similarity. Alternatively, PgVector as a Postgres extension to reduce infrastructure complexity.
-- **Storage:** Postgres (OCI Database) for canonical truth; OCI Object Storage for web archive HTML.
+- **LLM cost optimization:** Keep the daily job lightweight. Reserve Codex-backed generation for the importance filter, article classification, per-audience summaries, and executive summaries.
+- **Vector search:** The current copy uses local nomic embeddings stored in SQLite and numpy cosine similarity. Migrate to PgVector or Qdrant only if the archive or internal-source footprint grows beyond what SQLite can comfortably handle.
+- **Storage:** SQLite is the current system of record; static HTML is served directly from the VM. Move to Postgres/Object Storage later only if operational needs justify it.
 
 **Do not** use OpenClaw or any third-party workflow automation platform for the core pipeline — this adds complexity, latency, and cost without meaningful benefit for a pipeline of this scale. The system is a scheduled batch job, not a real-time pipeline.
 
@@ -1455,13 +1459,13 @@ The rendering output is an audience-specific HTML email template populated with 
 
 **Recommendation:** Three-layer tracking system:
 
-**Layer 1 — Postmark for email-level metrics.** Postmark provides open tracking (pixel) and click tracking (link rewriting) out of the box. Enable both in Postmark message stream settings. Use the Postmark webhook to push open/click events to the application database in near-real-time. Store in a `email_events` table: `(postmark_message_id, event_type, occurred_at, audience_id, briefing_date)`.
+**Layer 1 — Delivery transport / provider events.** The current copy sends through Gmail-compatible SMTP but does not yet capture opens/clicks. If these metrics become important, either add a custom tracking pixel service or move delivery to a provider that emits delivery/open events to a webhook. Store events in an `email_events` table: `(message_id, event_type, occurred_at, audience_id, briefing_date)`.
 
-**Layer 2 — Custom tracking URLs for story-level metrics.** Every story link in every email is replaced with a unique tracking URL (`https://track.oci-intel.oracle.com/c/{tracking_id}`). The tracking endpoint (a simple web service) logs the click and issues a 302 redirect to the canonical article. This gives story-level, section-level, and position-level click attribution that Postmark's built-in click tracking cannot provide alone.
+**Layer 2 — Custom tracking URLs for story-level metrics.** Every story link in every email is replaced with a unique tracking URL (`https://track.oci-intel.oracle.com/c/{tracking_id}`). The tracking endpoint (a simple web service) logs the click and issues a 302 redirect to the canonical article. This gives story-level, section-level, and position-level click attribution regardless of the underlying SMTP/ESP provider.
 
 **Layer 3 — Feedback pixel URLs for explicit feedback.** Feedback controls (`[Useful]`, `[Not useful]`, etc.) are implemented as plain HTML links pointing to `https://track.oci-intel.oracle.com/f/{feedback_tracking_id}?type={feedback_type}`. The tracking endpoint logs the feedback event and returns a minimal "Thank you" response (or redirects to a confirmation page). No JavaScript required; works in all email clients.
 
-**For V1 simplicity:** Postmark + custom tracking URLs is sufficient. Bitly can optionally be added as a link-shortening layer on top of the custom tracking URLs for visual cleanliness in the email, but it is not required.
+**For V1 simplicity:** Weekly SMTP delivery plus custom tracking URLs is sufficient. If open-rate instrumentation matters later, add a tracking-capable ESP or a dedicated open-pixel service without changing the rest of the pipeline.
 
 ---
 
@@ -1472,17 +1476,17 @@ The rendering output is an audience-specific HTML email template populated with 
 **Recommendation:** The full specification is in Section 6 (Content Deduplication Requirements). For implementation guidance:
 
 **Data infrastructure:**
-- **Postgres** stores canonical story clusters with delivered-at timestamps. The 7-day window is a simple `WHERE last_delivered_at > NOW() - INTERVAL '7 days'` query.
-- **Vector search (Qdrant or PgVector)** stores headline and summary embeddings for all delivered story clusters. ANN (approximate nearest neighbor) search retrieves the most similar past items for each new candidate in milliseconds.
-- **Keyword/full-text search** (Postgres `tsvector`) provides a fast fallback for cases where embeddings may miss literal matches (e.g., exact company names, deal sizes).
+- **SQLite** currently stores canonical story clusters with delivered-at timestamps. The 7-day window is a simple query against the local DB and is sufficient at the current scale.
+- **Local embeddings** (`nomic-embed-text-v1.5`, truncated to 256d) are stored with articles and clusters. Numpy cosine similarity handles the current archive size without an external vector DB.
+- **Keyword/full-text search** can remain lightweight for now. Add PgVector/Qdrant only if archive size or internal-source volume grows significantly.
 
 **Implementation sequence:**
 1. When a new article is ingested, compute its `headline_embedding` and `summary_embedding` using the same embedding model as stored clusters (consistency is critical — model changes require re-embedding all stored clusters)
-2. Query Qdrant for the top-5 most similar stored cluster embeddings within the 7-day window
+2. Query the stored cluster embeddings for the most similar items within the 7-day window
 3. For each similar cluster above the 0.85 cosine similarity threshold, run the fact delta check against the stored `FactDelta` object
 4. If no fact delta: suppress and log. If fact delta detected: approve as follow-up, update the cluster's `fact_snapshot`, render with follow-up label.
 
-**Embedding model recommendation:** Use a single embedding model for the entire pipeline — OpenAI `text-embedding-3-large` (1,536 dimensions, good multilingual support) or Anthropic's embeddings if available. Do not mix embedding models; similarity comparisons are only valid within the same embedding space.
+**Embedding model recommendation:** Use a single embedding model for the entire pipeline. The current copy uses local `nomic-embed-text-v1.5` embeddings truncated to 256 dimensions. Do not mix embedding models; similarity comparisons are only valid within the same embedding space.
 
 **Calibration:** The 0.85 cosine similarity threshold for `candidate_duplicate` is a starting estimate. Run a 2-week calibration period after launch where the editorial team manually reviews all suppressed items daily and flags false positives (suppressed items that should have been delivered) and false negatives (delivered items that were actually duplicates). Adjust the threshold based on observed precision/recall.
 
@@ -1491,4 +1495,4 @@ The rendering output is an audience-specific HTML email template populated with 
 *End of Product Requirements Document*
 
 *Document version 1.0 — authored 2026-03-10*
-*Next review: 2026-04-10 or upon significant pipeline design changes*
+*Implementation note last updated: 2026-04-14*

@@ -4,11 +4,12 @@
 # Weekly on Monday at 6 AM UTC — full pipeline + email delivery
 #
 # Crontab entries:
-#   0 5 * * * /home/ubuntu/projects/ai-daily-briefing-chatgpt/scripts/daily_run.sh ingest
-#   0 6 * * 1 /home/ubuntu/projects/ai-daily-briefing-chatgpt/scripts/daily_run.sh weekly
+#   0 5 * * * /home/ubuntu/projects/ai-daily-briefing-codex/scripts/daily_run.sh ingest
+#   0 6 * * 1 /home/ubuntu/projects/ai-daily-briefing-codex/scripts/daily_run.sh weekly
 #
-# This wrapper is for the ChatGPT / Codex copy only. The original Claude
-# project's cron wrapper remains separate and untouched.
+# This wrapper is for the Codex copy only. The env file lives under the
+# legacy config directory name ~/.config/ai-daily-briefing-chatgpt/ so the
+# current VM setup does not need to move secrets.
 
 set -euo pipefail
 

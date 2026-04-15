@@ -1,25 +1,32 @@
 # AI Daily Executive Briefing — Oracle Code Assist / Codex Copy
 
-Automated intelligence digest for OCI executives. Aggregates news from 31 sources, deduplicates using sentence embeddings, and delivers personalized daily briefings. This copy uses Oracle Code Assist authentication through the local `codex` CLI for all LLM calls and does not require `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
+Automated intelligence digest for OCI executives. This Codex copy captures important external news every day, stores deduplicated articles in SQLite, and produces a weekly multi-audience briefing website plus email delivery. It uses Oracle Code Assist authentication through the local `codex` CLI for all LLM calls and does not require `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
 
 ## How It Works
 
-```
-Fetch (31 RSS feeds + full article text)
-  → Pre-score (source credibility + timeliness)
-  → In-run dedup (Jaccard word overlap)
-  → Cross-day dedup (embedding similarity vs 7-day cluster history)
-  → Classify (Codex / Oracle Code Assist)
+```text
+Daily ingest (05:00 UTC)
+  → Fetch RSS feeds + full article text
+  → Compute embeddings
+  → Deduplicate within the batch
+  → Skip URLs already stored in SQLite
+  → Codex importance filter (keep only material news)
+  → Save important articles + embeddings to SQLite
+
+Weekly digest (Monday 06:00 UTC)
+  → Load last 7 days from SQLite
+  → Weekly embedding dedup
+  → Classify + relevance filter
   → Score per audience (4 executives)
-  → Summarize (Codex / Oracle Code Assist)
-  → Executive summaries (Codex / Oracle Code Assist)
+  → Summarize + generate executive summaries
   → Render HTML
+  → Send weekly email via Gmail-compatible SMTP
 ```
 
 ## Quick Start
 
 ```bash
-cd /home/ubuntu/projects/ai-daily-briefing-chatgpt
+cd /home/ubuntu/projects/ai-daily-briefing-codex
 
 # Optional but recommended
 python3 -m venv .venv
@@ -36,35 +43,36 @@ codex --version
 # Option A: run Oracle's "Copy Codex Environment Setup Command"
 # Option B:
 #   echo "<your_oracle_code_assist_api_key>" | codex login --with-api-key
-# Then verify:
 codex login status
 
-# If codex is installed outside PATH, point the app at it
-# export CODEX_BIN="/full/path/to/codex"
+# Daily ingest (used by the daily cron job)
+python3 scripts/daily_ingest.py
 
-# Optional model/profile overrides
-# export CODEX_PROFILE="gpt-5-4"
-# export CODEX_SUMMARY_PROFILE="gpt-5-4"
+# Weekly digest render + email (used by the weekly cron job)
+python3 scripts/weekly_pipeline.py
 
-# Dry run (no LLM calls, placeholder text)
+# Optional one-shot full run from fresh feeds
 python3 main.py --dry-run
 
-# Full run
-python3 main.py
-
-# Preview output
+# Preview static briefing pages
 python3 serve.py --no-browser
-# Open http://localhost:8000/
+
+# Run the admin API separately
+python3 -m uvicorn app.api.routes:app --host 127.0.0.1 --port 8002
 ```
+
+Scheduled runs load environment variables from `~/.config/ai-daily-briefing-chatgpt/briefing.env`. The config directory still uses the older `ai-daily-briefing-chatgpt` name for compatibility with the existing VM setup.
 
 ## Key Features
 
+- **Daily importance filter**: a Codex pass removes tutorials, explainers, opinion pieces, and low-signal feed items before they enter the database
 - **Embedding-based dedup**: nomic-embed-text-v1.5 (256d Matryoshka) detects same stories across different sources and days
 - **Fact-delta scoring**: 6-signal system distinguishes story updates from repeats (new numbers, entities, quotes, verb progression)
 - **Full article extraction**: Trafilatura fetches article body text for richer embeddings and summaries
 - **SpaCy NER**: proper named entity recognition for fact extraction
 - **Per-audience personalization**: 4 executive profiles with different section weights and tone guidance
 - **Admin dashboard**: articles, clusters, dedup stats, rankings, interactive 3D cluster visualization
+- **Weekly email delivery**: Gmail-compatible SMTP send at the end of the weekly pipeline
 - **31 RSS sources**: Tier 1 (Bloomberg, WSJ, FT, CNBC, Reuters), Tier 2 (TechCrunch, Ars Technica, KrebsOnSecurity, etc.), Tier 3 (vendor blogs), Tier 4 (HN, Reddit)
 
 ## Audiences
@@ -87,34 +95,49 @@ python3 serve.py --no-browser
 | Database | SQLite |
 | Admin API | FastAPI |
 | Visualization | Plotly.js + UMAP + HDBSCAN |
+| Email delivery | Gmail-compatible SMTP |
+| Scheduling | cron + systemd |
 | Web server | nginx reverse proxy |
 
 ## Deployment
 
-Runs on OCI VM with:
-- `systemctl` services for briefing server (8000) and admin API (8002)
+Runs on an OCI VM with:
+- daily ingest cron at `05:00 UTC` via `scripts/daily_run.sh ingest`
+- weekly full digest cron at `06:00 UTC` every Monday via `scripts/daily_run.sh weekly`
+- `systemctl` services for briefing server (`ai-briefing`, port 8000) and admin API (`ai-briefing-admin`, port 8002)
 - nginx reverse proxy at `ainews.oci-incubations.com`
-- Daily cron at 5:00 AM UTC
+- config loaded from `~/.config/ai-daily-briefing-chatgpt/briefing.env`
+- public URLs:
+  - `http://ainews.oci-incubations.com/admin`
+  - `http://ainews.oci-incubations.com/YYYY-MM-DD/index.html`
 
 ## Project Structure
 
-```
-main.py                  — 9-step pipeline orchestrator
+```text
+main.py                  — one-shot full pipeline from fresh feeds
 briefing/
   config.py              — 31 RSS sources, 4 audience profiles
   ingest.py              — RSS fetching + Trafilatura full-text
   score.py               — per-audience scoring
-  llm.py                 — `codex exec` wrapper (classify, summarize)
-  render.py              — HTML generation
+  llm.py                 — `codex exec` wrapper (filter, classify, summarize)
+  render.py              — briefing HTML generation
+  render_email.py        — weekly email HTML rendering
 app/
   dedup/                 — in-run + cross-day dedup, embeddings, fingerprinting
   db/                    — SQLAlchemy models
   api/                   — FastAPI admin endpoints
+  delivery/              — Gmail-compatible SMTP delivery
+scripts/
+  daily_ingest.py        — daily lightweight ingest into SQLite
+  weekly_pipeline.py     — weekly briefing render + email from SQLite
+  daily_run.sh           — cron wrapper used on the VM
+serve.py                 — static server for briefing pages
 web/admin.html           — admin dashboard
 docs/
   ARCHITECTURE.md        — system architecture
   GAP_ANALYSIS.md        — feature status
   PRD.md                 — product requirements
+  archive/               — historical research/design docs (may reference Claude/Postmark)
 ```
 
 ## Documentation
@@ -123,3 +146,4 @@ docs/
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system architecture
 - [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md) — feature status and remaining work
 - [docs/PRD.md](docs/PRD.md) — product requirements document
+- [docs/archive/README.md](docs/archive/README.md) — historical planning docs; not the source of truth for the live Codex deployment
